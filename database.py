@@ -12,17 +12,21 @@ def get_db_connection():
     To use MySQL, configure st.secrets["mysql"] in your Streamlit dashboard.
     """
     # Check if MySQL secrets exist (for Streamlit Cloud deployment)
-    if "mysql" in st.secrets:
-        # try:
-        #     connection = mysql.connector.connect(
-        #         host=st.secrets["mysql"]["host"],
-        #         database=st.secrets["mysql"]["database"],
-        #         user=st.secrets["mysql"]["user"],
-        #         password=st.secrets["mysql"]["password"]
-        #     )
-        #     return connection, "mysql"
-        # except Exception as e:
-        #     print(f"MySQL Connection Error: {e}")
+    try:
+        if "mysql" in st.secrets:
+            # try:
+            #     connection = mysql.connector.connect(
+            #         host=st.secrets["mysql"]["host"],
+            #         database=st.secrets["mysql"]["database"],
+            #         user=st.secrets["mysql"]["user"],
+            #         password=st.secrets["mysql"]["password"]
+            #     )
+            #     return connection, "mysql"
+            # except Exception as e:
+            #     print(f"MySQL Connection Error: {e}")
+            pass
+    except Exception:
+        # st.secrets parsing fails locally if secrets.toml doesn't exist
         pass
     
     # Fallback to local SQLite for instant prototyping

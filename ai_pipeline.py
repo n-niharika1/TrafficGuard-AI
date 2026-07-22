@@ -1,15 +1,17 @@
 try:
     import cv2
 except Exception:  # pragma: no cover
-    class _CV2Stub:
-        FONT_HERSHEY_SIMPLEX = None
-        @staticmethod
-        def rectangle(img, pt1, pt2, color, thickness):
-            return img
-        @staticmethod
-        def putText(img, text, org, font, fontScale, color, thickness):
-            return img
-    cv2 = _CV2Stub()
+    import types, sys
+    _cv2_stub = types.SimpleNamespace()
+    _cv2_stub.FONT_HERSHEY_SIMPLEX = None
+    def rectangle(img, pt1, pt2, color, thickness):
+        return img
+    def putText(img, text, org, font, fontScale, color, thickness):
+        return img
+    _cv2_stub.rectangle = rectangle
+    _cv2_stub.putText = putText
+    sys.modules['cv2'] = _cv2_stub
+    cv2 = _cv2_stub
 import numpy as np
 try:
     import easyocr

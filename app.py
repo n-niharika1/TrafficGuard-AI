@@ -1,7 +1,14 @@
 import os
 import streamlit as st
 import pandas as pd
-import cv2
+try:
+    import cv2
+except Exception:
+    class _CV2Stub:
+        def __getattr__(self, name):
+            raise ImportError("OpenCV (cv2) is unavailable in this environment. Functions requiring cv2 cannot be used.")
+    cv2 = _CV2Stub()
+
 import numpy as np
 from streamlit_webrtc import webrtc_streamer
 import av

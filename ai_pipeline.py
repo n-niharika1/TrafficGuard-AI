@@ -11,7 +11,16 @@ except Exception:  # pragma: no cover
             return img
     cv2 = _CV2Stub()
 import numpy as np
-import easyocr
+try:
+    import easyocr
+except Exception:
+    class _EasyOCRStub:
+        class Reader:
+            def __init__(self, *args, **kwargs):
+                pass
+            def readtext(self, image):
+                return []
+    easyocr = _EasyOCRStub
 from ultralytics import YOLO
 
 class TrafficGuardAI:

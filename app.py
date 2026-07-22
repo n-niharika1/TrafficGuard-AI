@@ -7,6 +7,7 @@ import av
 
 from ai_pipeline import ai_system
 import database
+import utils
 
 # Set page configuration
 st.set_page_config(
@@ -111,12 +112,63 @@ elif role == "Traffic Officer":
                             st.write(f"**Helmet Missing:** {det.get('helmet_missing', False)}")
                             if st.button("Generate Challan", key=f"challan_btn_{i}"):
                                 plate = det.get('plate_text', 'UNKNOWN')
-                                database.insert_violation(plate, 'AI Detected Offence', 1000.0)
+                                fine = 1000.0
+                                # Save to DB
+                                database.insert_violation(plate, 'AI Detected Offence', fine)
+                                
+                                # Generate PDF
+                                v_data = {
+                                    'vehicle_number': plate,
+                                    'owner_name': 'Unknown (Fetch from DB)',
+                                    'violation_type': 'AI Detected Offence',
+                                    'fine_amount': fine,
+                                    'status': 'PENDING'
+                                }
+                                pdf_path = utils.generate_challan_pdf(v_data)
+                                
                                 st.success(f"Challan generated and saved to database for {plate}!")
+                                
+                                # Provide download button for the PDF
+                                with open(pdf_path, "rb") as pdf_file:
+                                    st.download_button(
+                                        label="Download Challan PDF",
+                                        data=pdf_file,
+                                        file_name=os.path.basename(pdf_path),
+                                        mime="application/pdf"
+                                    )
             
     elif menu == "Issue Challan":
         st.title("Issue Manual Challan")
         st.write("Generate a challan for a specific vehicle.")
+        
+        with st.form("manual_challan_form"):
+            veh_num = st.text_input("Vehicle Number Plate")
+            viol_type = st.selectbox("Violation Type", ["Speeding", "Helmet Missing", "Signal Jump", "Wrong Lane"])
+            fine_amt = st.number_input("Fine Amount (₹)", min_value=100.0, step=100.0)
+            
+            if st.form_submit_button("Issue Challan"):
+                if veh_num:
+                    database.insert_violation(veh_num, viol_type, fine_amt)
+                    
+                    v_data = {
+                        'vehicle_number': veh_num,
+                        'owner_name': 'Manual Entry',
+                        'violation_type': viol_type,
+                        'fine_amount': fine_amt,
+                        'status': 'PENDING'
+                    }
+                    pdf_path = utils.generate_challan_pdf(v_data)
+                    
+                    st.success(f"Manual Challan issued for {veh_num}!")
+                    with open(pdf_path, "rb") as pdf_file:
+                        st.download_button(
+                            label="Download Challan PDF",
+                            data=pdf_file,
+                            file_name=os.path.basename(pdf_path),
+                            mime="application/pdf"
+                        )
+                else:
+                    st.error("Please enter a vehicle number.")
         
     elif menu == "Search Vehicle":
         st.title("Vehicle Database Search")

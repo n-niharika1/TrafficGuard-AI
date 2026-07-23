@@ -3,13 +3,18 @@ import types
 import os
 from PIL import Image
 import io
+import numpy as np
 
-# Create comprehensive cv2 stub BEFORE importing anything else that uses cv2
+# ============================================================================
+# CRITICAL: Install cv2 stub BEFORE ANY OTHER IMPORTS
+# This must happen first to prevent YOLO from failing on cv2.imshow access
+# ============================================================================
+
 def create_cv2_stub():
-    """Create a stub for OpenCV that prevents import errors in headless environments"""
+    """Create a comprehensive stub for OpenCV that prevents import errors in headless environments"""
     _cv2_stub = types.SimpleNamespace()
     
-    # Constants
+    # === Constants ===
     _cv2_stub.FONT_HERSHEY_SIMPLEX = 0
     _cv2_stub.FONT_HERSHEY_PLAIN = 1
     _cv2_stub.FONT_HERSHEY_DUPLEX = 2
@@ -33,41 +38,47 @@ def create_cv2_stub():
     _cv2_stub.IMREAD_GRAYSCALE = 0
     _cv2_stub.IMREAD_UNCHANGED = -1
     
-    # Functions
+    # === Image Processing Functions ===
     def rectangle(img, pt1, pt2, color, thickness=1):
+        """Draw rectangle on image"""
+        if img is None:
+            return img
         return img
     
     def putText(img, text, org, font, fontScale, color, thickness=1, lineType=None):
+        """Put text on image"""
+        if img is None:
+            return img
         return img
     
     def circle(img, center, radius, color, thickness=-1):
+        """Draw circle on image"""
+        if img is None:
+            return img
         return img
     
     def line(img, pt1, pt2, color, thickness=1):
+        """Draw line on image"""
+        if img is None:
+            return img
         return img
     
     def cvtColor(img, code):
-        """Convert image color space using PIL as fallback"""
+        """Convert image color space"""
         try:
-            import numpy as np
             if img is None:
                 return img
             
-            # For RGB/BGR conversions, PIL handles it well
-            if code == _cv2_stub.COLOR_BGR2RGB or code == 4:
-                # BGR to RGB: flip channels
+            if code in (_cv2_stub.COLOR_BGR2RGB, 4):
                 if len(img.shape) == 3 and img.shape[2] == 3:
                     return img[:, :, ::-1].copy()
                 return img
-            elif code == _cv2_stub.COLOR_RGB2BGR or code == 5:
-                # RGB to BGR: flip channels
+            elif code in (_cv2_stub.COLOR_RGB2BGR, 5):
                 if len(img.shape) == 3 and img.shape[2] == 3:
                     return img[:, :, ::-1].copy()
                 return img
-            elif code == _cv2_stub.COLOR_BGR2GRAY or code == 6:
-                # BGR to Grayscale
+            elif code in (_cv2_stub.COLOR_BGR2GRAY, 6):
                 if len(img.shape) == 3:
-                    # Use luminosity formula
                     return np.dot(img[..., :3], [0.114, 0.587, 0.299]).astype(np.uint8)
                 return img
             else:
@@ -79,23 +90,15 @@ def create_cv2_stub():
     def imdecode(buf, flags):
         """Decode image from bytes using PIL"""
         try:
-            import numpy as np
             if buf is None or len(buf) == 0:
                 return None
             
-            # Use PIL to decode
             img_pil = Image.open(io.BytesIO(buf))
-            
-            # Convert to RGB if needed
             if img_pil.mode != 'RGB':
                 img_pil = img_pil.convert('RGB')
             
-            # Convert PIL to numpy array (RGB format)
             img_array = np.array(img_pil)
-            
-            # Convert RGB to BGR for OpenCV compatibility
             img_bgr = img_array[:, :, ::-1].copy()
-            
             return img_bgr
         except Exception as e:
             print(f"Error in imdecode: {e}")
@@ -104,17 +107,14 @@ def create_cv2_stub():
     def imencode(ext, img):
         """Encode image to bytes"""
         try:
-            import numpy as np
             if img is None:
                 return (False, b'')
             
-            # Convert BGR to RGB for PIL
             if len(img.shape) == 3 and img.shape[2] == 3:
                 img_rgb = img[:, :, ::-1]
             else:
                 img_rgb = img
             
-            # Use PIL to encode
             img_pil = Image.fromarray(img_rgb.astype(np.uint8))
             buf = io.BytesIO()
             img_pil.save(buf, format='PNG')
@@ -126,7 +126,6 @@ def create_cv2_stub():
     def imread(filename, flags=1):
         """Read image from file"""
         try:
-            import numpy as np
             if filename is None or not os.path.exists(filename):
                 return None
             
@@ -144,11 +143,9 @@ def create_cv2_stub():
     def imwrite(filename, img):
         """Write image to file"""
         try:
-            import numpy as np
             if img is None or filename is None:
                 return False
             
-            # Create directory if it doesn't exist
             os.makedirs(os.path.dirname(filename) or '.', exist_ok=True)
             
             if len(img.shape) == 3 and img.shape[2] == 3:
@@ -164,14 +161,26 @@ def create_cv2_stub():
             return False
     
     def imshow(winname, mat):
+        """Display image (no-op in headless environment)"""
         pass
     
     def destroyAllWindows():
+        """Destroy all windows (no-op in headless environment)"""
+        pass
+    
+    def destroyWindow(winname):
+        """Destroy window (no-op in headless environment)"""
         pass
     
     def waitKey(delay=0):
+        """Wait for key press (no-op in headless environment)"""
         return -1
     
+    def namedWindow(winname, flags=0):
+        """Create window (no-op in headless environment)"""
+        pass
+    
+    # Assign all methods to stub
     _cv2_stub.rectangle = rectangle
     _cv2_stub.putText = putText
     _cv2_stub.circle = circle
@@ -183,25 +192,28 @@ def create_cv2_stub():
     _cv2_stub.imwrite = imwrite
     _cv2_stub.imshow = imshow
     _cv2_stub.destroyAllWindows = destroyAllWindows
+    _cv2_stub.destroyWindow = destroyWindow
     _cv2_stub.waitKey = waitKey
+    _cv2_stub.namedWindow = namedWindow
     
     return _cv2_stub
 
-# Install cv2 stub BEFORE any imports that use it
+# Install cv2 stub IMMEDIATELY
 try:
     import cv2
-except (ImportError, AttributeError):
+    print("OpenCV already available")
+except (ImportError, AttributeError, ModuleNotFoundError):
+    print("Installing cv2 stub for headless environment")
     cv2_stub = create_cv2_stub()
     sys.modules['cv2'] = cv2_stub
 
-import numpy as np
-
-# Now try to import YOLO with the stub in place
+# NOW import ultralytics AFTER cv2 is available
 try:
     from ultralytics import YOLO
     YOLO_AVAILABLE = True
+    print("YOLO imported successfully")
 except Exception as e:
-    print(f"Warning: YOLO not available: {e}")
+    print(f"Error importing YOLO: {e}")
     YOLO_AVAILABLE = False
 
 # Try to import EasyOCR with fallback
@@ -230,29 +242,33 @@ class TrafficGuardAI:
         # Try to load YOLO model
         if YOLO_AVAILABLE:
             try:
+                print("Loading YOLO model (yolov8s)...")
                 # Use yolov8s instead of yolov8n for better accuracy (small model)
                 self.vehicle_model = YOLO("yolov8s.pt")
                 self.model_loaded = True
-                print("YOLO model loaded successfully (yolov8s).")
-                print(f"Available classes: {self.vehicle_model.names}")
+                print("✓ YOLO model loaded successfully (yolov8s)")
+                print(f"  Available classes: {list(self.vehicle_model.names.values())}")
             except Exception as e:
-                print(f"Error loading YOLO model: {e}")
+                print(f"✗ Error loading YOLO model: {e}")
+                import traceback
+                traceback.print_exc()
                 self.model_loaded = False
         else:
-            print("YOLO not available - running in demo mode")
+            print("✗ YOLO not available - running in demo mode")
             self.model_loaded = False
         
         # Try to load EasyOCR
         if EASYOCR_AVAILABLE:
             try:
+                print("Loading EasyOCR...")
                 self.reader = easyocr.Reader(['en'], gpu=False)
                 self.reader_loaded = True
-                print("EasyOCR loaded successfully.")
+                print("✓ EasyOCR loaded successfully")
             except Exception as e:
-                print(f"Error loading EasyOCR: {e}")
+                print(f"✗ Error loading EasyOCR: {e}")
                 self.reader_loaded = False
         else:
-            print("EasyOCR not available - running in demo mode")
+            print("✗ EasyOCR not available - running in demo mode")
             self.reader_loaded = False
 
     def process_frame(self, frame):
@@ -274,14 +290,14 @@ class TrafficGuardAI:
 
         try:
             # 1. Detect vehicles with lower confidence threshold
-            # conf=0.3 instead of default 0.5 to catch more detections
+            print("Running YOLO detection...")
             results = self.vehicle_model(frame, stream=False, verbose=False, conf=0.3)
             
-            print(f"YOLO detected {len(results)} result frames")
+            print(f"  YOLO detected {len(results)} result frames")
             
             for result in results:
                 boxes = result.boxes
-                print(f"Detected {len(boxes)} objects")
+                print(f"  Total objects found: {len(boxes)}")
                 
                 for box in boxes:
                     # Get class ID
@@ -289,10 +305,9 @@ class TrafficGuardAI:
                     class_name = self.vehicle_model.names[cls_id]
                     conf = float(box.conf[0])
                     
-                    print(f"Detected: {class_name} (confidence: {conf:.2f})")
+                    print(f"    → {class_name} (confidence: {conf:.2f})")
                     
                     # Accept broader range of vehicle types
-                    # YOLO detects: car, truck, bus, motorcycle, bicycle, etc.
                     vehicle_types = ['car', 'truck', 'bus', 'motorcycle', 'bicycle', 
                                    'bike', 'vehicle', 'auto', 'cycle', 'scooter', 'taxi']
                     
@@ -341,7 +356,7 @@ class TrafficGuardAI:
                             
                         detections_list.append(vehicle_info)
             
-            print(f"Total detections found: {len(detections_list)}")
+            print(f"  Total valid vehicle detections: {len(detections_list)}")
 
         except Exception as e:
             print(f"Error during AI processing: {e}")
@@ -352,9 +367,15 @@ class TrafficGuardAI:
 
 
 # Singleton instance
+print("\n" + "="*60)
+print("Initializing TrafficGuard AI System")
+print("="*60)
 try:
     ai_system = TrafficGuardAI()
 except Exception as e:
-    print(f"Error initializing TrafficGuardAI: {e}")
-    # Create a fallback instance that won't crash
+    print(f"Fatal error initializing TrafficGuardAI: {e}")
+    import traceback
+    traceback.print_exc()
     ai_system = TrafficGuardAI()
+
+print("="*60 + "\n")

@@ -1,21 +1,113 @@
-try:
-    import cv2
-except Exception:  # pragma: no cover
-    import types, sys
+import sys
+import types
+import os
+
+# Create comprehensive cv2 stub BEFORE importing anything else that uses cv2
+def create_cv2_stub():
+    """Create a stub for OpenCV that prevents import errors in headless environments"""
     _cv2_stub = types.SimpleNamespace()
-    _cv2_stub.FONT_HERSHEY_SIMPLEX = None
-    def rectangle(img, pt1, pt2, color, thickness):
+    
+    # Constants
+    _cv2_stub.FONT_HERSHEY_SIMPLEX = 0
+    _cv2_stub.FONT_HERSHEY_PLAIN = 1
+    _cv2_stub.FONT_HERSHEY_DUPLEX = 2
+    _cv2_stub.FONT_HERSHEY_COMPLEX = 3
+    _cv2_stub.FONT_HERSHEY_TRIPLEX = 4
+    _cv2_stub.FONT_HERSHEY_COMPLEX_SMALL = 5
+    _cv2_stub.FONT_HERSHEY_SCRIPT_SIMPLEX = 6
+    _cv2_stub.FONT_HERSHEY_SCRIPT_COMPLEX = 7
+    _cv2_stub.FONT_ITALIC = 16
+    
+    _cv2_stub.LINE_4 = 4
+    _cv2_stub.LINE_8 = 8
+    _cv2_stub.LINE_AA = 16
+    
+    _cv2_stub.COLOR_BGR2RGB = 4
+    _cv2_stub.COLOR_RGB2BGR = 5
+    _cv2_stub.COLOR_BGR2GRAY = 6
+    _cv2_stub.COLOR_GRAY2BGR = 8
+    
+    _cv2_stub.IMREAD_COLOR = 1
+    _cv2_stub.IMREAD_GRAYSCALE = 0
+    _cv2_stub.IMREAD_UNCHANGED = -1
+    
+    # Functions
+    def rectangle(img, pt1, pt2, color, thickness=1):
         return img
-    def putText(img, text, org, font, fontScale, color, thickness):
+    
+    def putText(img, text, org, font, fontScale, color, thickness=1, lineType=None):
         return img
+    
+    def circle(img, center, radius, color, thickness=-1):
+        return img
+    
+    def line(img, pt1, pt2, color, thickness=1):
+        return img
+    
+    def cvtColor(img, code):
+        return img
+    
+    def imdecode(buf, flags):
+        return None
+    
+    def imencode(ext, img):
+        return (True, b'')
+    
+    def imread(filename, flags=1):
+        return None
+    
+    def imwrite(filename, img):
+        return True
+    
+    def imshow(winname, mat):
+        pass
+    
+    def destroyAllWindows():
+        pass
+    
+    def waitKey(delay=0):
+        return -1
+    
     _cv2_stub.rectangle = rectangle
     _cv2_stub.putText = putText
-    sys.modules['cv2'] = _cv2_stub
-    cv2 = _cv2_stub
+    _cv2_stub.circle = circle
+    _cv2_stub.line = line
+    _cv2_stub.cvtColor = cvtColor
+    _cv2_stub.imdecode = imdecode
+    _cv2_stub.imencode = imencode
+    _cv2_stub.imread = imread
+    _cv2_stub.imwrite = imwrite
+    _cv2_stub.imshow = imshow
+    _cv2_stub.destroyAllWindows = destroyAllWindows
+    _cv2_stub.waitKey = waitKey
+    
+    return _cv2_stub
+
+# Install cv2 stub BEFORE any imports that use it
+try:
+    import cv2
+except (ImportError, AttributeError):
+    cv2_stub = create_cv2_stub()
+    sys.modules['cv2'] = cv2_stub
+
 import numpy as np
+
+# Now try to import YOLO with the stub in place
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: YOLO not available: {e}")
+    YOLO_AVAILABLE = False
+
+# Try to import EasyOCR with fallback
 try:
     import easyocr
-except Exception:
+    EASYOCR_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: EasyOCR not available: {e}")
+    EASYOCR_AVAILABLE = False
+    
     class _EasyOCRStub:
         class Reader:
             def __init__(self, *args, **kwargs):
@@ -23,24 +115,39 @@ except Exception:
             def readtext(self, image):
                 return []
     easyocr = _EasyOCRStub
-from ultralytics import YOLO
+
 
 class TrafficGuardAI:
     def __init__(self):
         print("Initializing TrafficGuard AI Models...")
-        # For production, you would use custom trained YOLO models for helmets and license plates.
-        # Here we use the base yolov8n for general object detection (vehicles).
-        try:
-            self.vehicle_model = YOLO("yolov8n.pt") 
-            # self.plate_model = YOLO("plate_model.pt") # Placeholder for custom plate model
-            # self.helmet_model = YOLO("helmet_model.pt") # Placeholder for custom helmet model
-            
-            # Initialize EasyOCR (using English)
-            # gpu=True if CUDA is available, else False
-            self.reader = easyocr.Reader(['en'], gpu=False) 
-            print("Models loaded successfully.")
-        except Exception as e:
-            print(f"Error loading models: {e}")
+        self.model_loaded = False
+        self.reader_loaded = False
+        
+        # Try to load YOLO model
+        if YOLO_AVAILABLE:
+            try:
+                self.vehicle_model = YOLO("yolov8n.pt")
+                self.model_loaded = True
+                print("YOLO model loaded successfully.")
+            except Exception as e:
+                print(f"Error loading YOLO model: {e}")
+                self.model_loaded = False
+        else:
+            print("YOLO not available - running in demo mode")
+            self.model_loaded = False
+        
+        # Try to load EasyOCR
+        if EASYOCR_AVAILABLE:
+            try:
+                self.reader = easyocr.Reader(['en'], gpu=False)
+                self.reader_loaded = True
+                print("EasyOCR loaded successfully.")
+            except Exception as e:
+                print(f"Error loading EasyOCR: {e}")
+                self.reader_loaded = False
+        else:
+            print("EasyOCR not available - running in demo mode")
+            self.reader_loaded = False
 
     def process_frame(self, frame):
         """
@@ -49,6 +156,11 @@ class TrafficGuardAI:
         """
         annotated_frame = frame.copy()
         detections_list = []
+
+        # If models aren't loaded, return frame as-is
+        if not self.model_loaded:
+            print("Models not loaded - skipping detection")
+            return annotated_frame, detections_list
 
         try:
             # 1. Detect vehicles
@@ -80,30 +192,29 @@ class TrafficGuardAI:
                         }
                         
                         # --- OCR FOR LICENSE PLATE ---
-                        # In a real app, you'd use a plate detector first. 
-                        # Here, we run OCR on the lower half of the vehicle as a heuristic fallback.
-                        h = y2 - y1
-                        lower_half_crop = frame[y1 + h//2 : y2, x1:x2]
-                        
-                        if lower_half_crop.size > 0:
-                            # Run EasyOCR
-                            ocr_results = self.reader.readtext(lower_half_crop)
-                            plate_text = ""
-                            for (bbox, text, prob) in ocr_results:
-                                if prob > 0.5: # Confidence threshold
-                                    plate_text += text + " "
+                        if self.reader_loaded:
+                            h = y2 - y1
+                            lower_half_crop = frame[y1 + h//2 : y2, x1:x2]
                             
-                            plate_text = plate_text.strip().upper()
-                            if plate_text:
-                                vehicle_info["plate_text"] = plate_text
-                                cv2.putText(annotated_frame, f"Plate: {plate_text}", (x1, y2 + 20), 
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                            if lower_half_crop.size > 0:
+                                try:
+                                    # Run EasyOCR
+                                    ocr_results = self.reader.readtext(lower_half_crop)
+                                    plate_text = ""
+                                    for (bbox, text, prob) in ocr_results:
+                                        if prob > 0.5:  # Confidence threshold
+                                            plate_text += text + " "
+                                    
+                                    plate_text = plate_text.strip().upper()
+                                    if plate_text:
+                                        vehicle_info["plate_text"] = plate_text
+                                        cv2.putText(annotated_frame, f"Plate: {plate_text}", (x1, y2 + 20), 
+                                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                                except Exception as e:
+                                    print(f"Error during OCR: {e}")
 
                         # --- HELMET DETECTION ---
-                        # In a real app, you'd run a helmet detector model on motorcycles.
                         if class_name == 'motorcycle':
-                            # Placeholder logic: randomly assign helmet status for demo if no custom model
-                            # vehicle_info["helmet_missing"] = True
                             pass
                             
                         detections_list.append(vehicle_info)
@@ -113,5 +224,11 @@ class TrafficGuardAI:
 
         return annotated_frame, detections_list
 
+
 # Singleton instance
-ai_system = TrafficGuardAI()
+try:
+    ai_system = TrafficGuardAI()
+except Exception as e:
+    print(f"Error initializing TrafficGuardAI: {e}")
+    # Create a fallback instance that won't crash
+    ai_system = TrafficGuardAI()

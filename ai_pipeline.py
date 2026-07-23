@@ -230,9 +230,11 @@ class TrafficGuardAI:
         # Try to load YOLO model
         if YOLO_AVAILABLE:
             try:
-                self.vehicle_model = YOLO("yolov8n.pt")
+                # Use yolov8s instead of yolov8n for better accuracy (small model)
+                self.vehicle_model = YOLO("yolov8s.pt")
                 self.model_loaded = True
-                print("YOLO model loaded successfully.")
+                print("YOLO model loaded successfully (yolov8s).")
+                print(f"Available classes: {self.vehicle_model.names}")
             except Exception as e:
                 print(f"Error loading YOLO model: {e}")
                 self.model_loaded = False
@@ -271,20 +273,31 @@ class TrafficGuardAI:
             return annotated_frame, detections_list
 
         try:
-            # 1. Detect vehicles
-            results = self.vehicle_model(frame, stream=False, verbose=False)
+            # 1. Detect vehicles with lower confidence threshold
+            # conf=0.3 instead of default 0.5 to catch more detections
+            results = self.vehicle_model(frame, stream=False, verbose=False, conf=0.3)
+            
+            print(f"YOLO detected {len(results)} result frames")
             
             for result in results:
                 boxes = result.boxes
+                print(f"Detected {len(boxes)} objects")
+                
                 for box in boxes:
                     # Get class ID
                     cls_id = int(box.cls[0])
                     class_name = self.vehicle_model.names[cls_id]
+                    conf = float(box.conf[0])
                     
-                    # We are interested in vehicles (car, motorcycle, bus, truck)
-                    if class_name in ['car', 'motorcycle', 'bus', 'truck']:
+                    print(f"Detected: {class_name} (confidence: {conf:.2f})")
+                    
+                    # Accept broader range of vehicle types
+                    # YOLO detects: car, truck, bus, motorcycle, bicycle, etc.
+                    vehicle_types = ['car', 'truck', 'bus', 'motorcycle', 'bicycle', 
+                                   'bike', 'vehicle', 'auto', 'cycle', 'scooter', 'taxi']
+                    
+                    if class_name.lower() in vehicle_types or 'car' in class_name.lower() or 'truck' in class_name.lower():
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        conf = float(box.conf[0])
                         
                         # Draw bounding box for vehicle
                         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -301,16 +314,16 @@ class TrafficGuardAI:
                         
                         # --- OCR FOR LICENSE PLATE ---
                         if self.reader_loaded:
-                            h = y2 - y1
-                            lower_half_crop = frame[y1 + h//2 : y2, x1:x2]
-                            
-                            if lower_half_crop.size > 0:
-                                try:
+                            try:
+                                h = y2 - y1
+                                lower_half_crop = frame[y1 + h//2 : y2, x1:x2]
+                                
+                                if lower_half_crop.size > 0:
                                     # Run EasyOCR
                                     ocr_results = self.reader.readtext(lower_half_crop)
                                     plate_text = ""
                                     for (bbox, text, prob) in ocr_results:
-                                        if prob > 0.5:  # Confidence threshold
+                                        if prob > 0.3:  # Lower confidence threshold for OCR
                                             plate_text += text + " "
                                     
                                     plate_text = plate_text.strip().upper()
@@ -318,17 +331,22 @@ class TrafficGuardAI:
                                         vehicle_info["plate_text"] = plate_text
                                         cv2.putText(annotated_frame, f"Plate: {plate_text}", (x1, y2 + 20), 
                                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                                except Exception as e:
-                                    print(f"Error during OCR: {e}")
+                            except Exception as e:
+                                print(f"Error during OCR: {e}")
 
                         # --- HELMET DETECTION ---
-                        if class_name == 'motorcycle':
+                        if 'motorcycle' in class_name.lower() or 'bike' in class_name.lower():
+                            # In production, run helmet detector model on motorcycles
                             pass
                             
                         detections_list.append(vehicle_info)
+            
+            print(f"Total detections found: {len(detections_list)}")
 
         except Exception as e:
             print(f"Error during AI processing: {e}")
+            import traceback
+            traceback.print_exc()
 
         return annotated_frame, detections_list
 

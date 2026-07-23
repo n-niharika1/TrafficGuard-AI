@@ -1,6 +1,8 @@
 import sys
 import types
 import os
+from PIL import Image
+import io
 
 # Create comprehensive cv2 stub BEFORE importing anything else that uses cv2
 def create_cv2_stub():
@@ -45,19 +47,121 @@ def create_cv2_stub():
         return img
     
     def cvtColor(img, code):
-        return img
+        """Convert image color space using PIL as fallback"""
+        try:
+            import numpy as np
+            if img is None:
+                return img
+            
+            # For RGB/BGR conversions, PIL handles it well
+            if code == _cv2_stub.COLOR_BGR2RGB or code == 4:
+                # BGR to RGB: flip channels
+                if len(img.shape) == 3 and img.shape[2] == 3:
+                    return img[:, :, ::-1].copy()
+                return img
+            elif code == _cv2_stub.COLOR_RGB2BGR or code == 5:
+                # RGB to BGR: flip channels
+                if len(img.shape) == 3 and img.shape[2] == 3:
+                    return img[:, :, ::-1].copy()
+                return img
+            elif code == _cv2_stub.COLOR_BGR2GRAY or code == 6:
+                # BGR to Grayscale
+                if len(img.shape) == 3:
+                    # Use luminosity formula
+                    return np.dot(img[..., :3], [0.114, 0.587, 0.299]).astype(np.uint8)
+                return img
+            else:
+                return img
+        except Exception as e:
+            print(f"Error in cvtColor: {e}")
+            return img
     
     def imdecode(buf, flags):
-        return None
+        """Decode image from bytes using PIL"""
+        try:
+            import numpy as np
+            if buf is None or len(buf) == 0:
+                return None
+            
+            # Use PIL to decode
+            img_pil = Image.open(io.BytesIO(buf))
+            
+            # Convert to RGB if needed
+            if img_pil.mode != 'RGB':
+                img_pil = img_pil.convert('RGB')
+            
+            # Convert PIL to numpy array (RGB format)
+            img_array = np.array(img_pil)
+            
+            # Convert RGB to BGR for OpenCV compatibility
+            img_bgr = img_array[:, :, ::-1].copy()
+            
+            return img_bgr
+        except Exception as e:
+            print(f"Error in imdecode: {e}")
+            return None
     
     def imencode(ext, img):
-        return (True, b'')
+        """Encode image to bytes"""
+        try:
+            import numpy as np
+            if img is None:
+                return (False, b'')
+            
+            # Convert BGR to RGB for PIL
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                img_rgb = img[:, :, ::-1]
+            else:
+                img_rgb = img
+            
+            # Use PIL to encode
+            img_pil = Image.fromarray(img_rgb.astype(np.uint8))
+            buf = io.BytesIO()
+            img_pil.save(buf, format='PNG')
+            return (True, buf.getvalue())
+        except Exception as e:
+            print(f"Error in imencode: {e}")
+            return (False, b'')
     
     def imread(filename, flags=1):
-        return None
+        """Read image from file"""
+        try:
+            import numpy as np
+            if filename is None or not os.path.exists(filename):
+                return None
+            
+            img_pil = Image.open(filename)
+            if img_pil.mode != 'RGB':
+                img_pil = img_pil.convert('RGB')
+            
+            img_array = np.array(img_pil)
+            img_bgr = img_array[:, :, ::-1].copy()
+            return img_bgr
+        except Exception as e:
+            print(f"Error in imread: {e}")
+            return None
     
     def imwrite(filename, img):
-        return True
+        """Write image to file"""
+        try:
+            import numpy as np
+            if img is None or filename is None:
+                return False
+            
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(filename) or '.', exist_ok=True)
+            
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                img_rgb = img[:, :, ::-1]
+            else:
+                img_rgb = img
+            
+            img_pil = Image.fromarray(img_rgb.astype(np.uint8))
+            img_pil.save(filename)
+            return True
+        except Exception as e:
+            print(f"Error in imwrite: {e}")
+            return False
     
     def imshow(winname, mat):
         pass
@@ -154,6 +258,10 @@ class TrafficGuardAI:
         Process a single image frame to detect vehicles, helmets, and number plates.
         Returns the annotated frame and a list of structured detections.
         """
+        if frame is None:
+            print("Error: Frame is None")
+            return None, []
+            
         annotated_frame = frame.copy()
         detections_list = []
 
